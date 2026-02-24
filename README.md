@@ -18,11 +18,10 @@ A robust JavaScript automation tool designed to streamline the removal of items 
 This utility operates by grouping UI elements into coordinate-based "rows." This allows the script to accurately identify the specific "More" menu associated with a post, even when Facebook's internal class names change. By filtering buttons based on their physical width (maximum 60px), it effectively ignores larger UI elements like "Add to Collection" or "Share" buttons.
 
 ### Key Features
-* **Top-Priority Execution:** Automatically resets the viewport to the absolute top of the page (`window.scrollTo(0, 0)`) to ensure items are removed in chronological or list order.
-* **Dimensional Filtering:** Excludes UI elements based on width (targeting buttons < 60px) to distinguish between the "More" menu and larger action buttons.
-* **Keyword Guardians:** Evaluates `aria-label` and `innerText` attributes to prevent accidental interaction with "Share," "Collection," or "Message" elements.
-* **State Recovery:** Features an automated escape sequence to close incorrect overlays and maintain process continuity.
-
+* **Top-Priority Execution:** Resets the viewport to `(0, 0)` on every loop to maintain chronological order.
+* **Dimensional Filtering:** Targets elements based on physical width (< 60px) to ignore "Share" or "Collection" buttons.
+* **Helper One-Liners:** Utilizes `sleep` and `findByText` helpers to reduce code bloat and improve execution speed.
+* **State Recovery:** Automatically dispatches `Escape` key events if a menu fails to resolve, preventing script hang-ups.
 ---
 
 ## Installation & Usage
