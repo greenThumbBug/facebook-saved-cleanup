@@ -33,10 +33,9 @@ This utility operates by grouping UI elements into coordinate-based "rows." This
 
 ### Execution Steps
 1. Navigate to the **Saved Items** page on Facebook.
-2. Open the **Developer Tools** (Press `F12` or `Ctrl+Shift+I`).
-3. Select the **Console** tab.
-4. Paste the source code provided below into the console and press **Enter**.
-5. To terminate the process at any time, simply **Refresh** the browser tab.
+2. Open the **Developer Tools** (Press `Ctrl+Shift+J`).
+3. Paste the source code provided below into the console and press **Enter**.
+4. To terminate the process at any time, simply **Refresh** the browser tab.
 
 ---
 
@@ -44,136 +43,62 @@ This utility operates by grouping UI elements into coordinate-based "rows." This
 
 ```javascript
 /**
- * Facebook Saved Items Cleanup Utility
- * Professional Refactor - v1.0.0
+ * Facebook Saved Items Cleanup Utility - Optimized v1.1.0
  */
+(async () => {
+    const CFG = { scroll: 1000, action: 500, wait: 800, retry: 12 };
+    console.log("Cleanup Optimized: Running...");
 
-async function initializeSavedItemsCleanup() {
-    console.log("Cleanup process initiated. System is running in continuous mode.");
-
-    const CONFIG = {
-        scrollDelay: 1000,
-        actionDelay: 500,
-        menuRetryAttempts: 12,
-        retryInterval: 100,
-        postActionWait: 800,
-        maxButtonWidth: 60,
-        headerOffset: 120,
-        footerBuffer: 0.8
-    };
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const findByText = (tag, txt) => Array.from(document.querySelectorAll(tag)).find(el => el.innerText?.includes(txt));
 
     while (true) {
-        // Reset viewport to ensure top-down processing
         window.scrollTo(0, 0);
-        await new Promise(resolve => setTimeout(resolve, CONFIG.scrollDelay));
+        await sleep(CFG.scroll);
 
-        const actionButtons = identifyActionButtons(CONFIG);
-
-        if (actionButtons.length === 0) {
-            console.log("Searching for targets...");
-            window.scrollBy(0, 500);
-            await new Promise(resolve => setTimeout(resolve, CONFIG.scrollDelay));
-            continue;
-        }
-
-        await processButtonRows(actionButtons, CONFIG);
-    }
-}
-
-function identifyActionButtons(config) {
-    const screenHeight = window.innerHeight;
-    
-    return Array.from(document.querySelectorAll('div[role="button"]'))
-        .filter(button => {
-            const rect = button.getBoundingClientRect();
-            const label = (button.getAttribute('aria-label') || "").toLowerCase();
-            const text = button.innerText.toLowerCase();
-
-            const isWithinBounds = rect.top > config.headerOffset && 
-                                   rect.top < (screenHeight * config.footerBuffer);
-            
-            const isVisible = rect.width > 0 && rect.width < config.maxButtonWidth;
-
-            const isInvalidType = label.includes("share") || 
-                                  text.includes("collection") || 
-                                  label.includes("collection");
-
-            return isWithinBounds && isVisible && !isInvalidType;
+        const btns = Array.from(document.querySelectorAll('div[role="button"]')).filter(b => {
+            const r = b.getBoundingClientRect();
+            const l = (b.getAttribute('aria-label') || "").toLowerCase();
+            return r.top > 120 && r.width > 0 && r.width < 60 && !l.includes("share") && !l.includes("collection");
         });
-}
 
-async function processButtonRows(buttons, config) {
-    const rows = {};
-    
-    buttons.forEach(btn => {
-        const yCoord = Math.round(btn.getBoundingClientRect().top / 15) * 15;
-        if (!rows[yCoord]) rows[yCoord] = [];
-        rows[yCoord].push(btn);
-    });
+        if (!btns.length) { window.scrollBy(0, 500); continue; }
 
-    const sortedRowKeys = Object.keys(rows).sort((a, b) => Number(a) - Number(b));
+        const rows = btns.reduce((acc, b) => {
+            const y = Math.round(b.getBoundingClientRect().top / 15) * 15;
+            acc[y] = [...(acc[y] || []), b];
+            return acc;
+        }, {});
 
-    for (const y of sortedRowKeys.slice(0, 3)) {
-        const rowItems = rows[y];
-        if (!rowItems.length) continue;
+        for (const y of Object.keys(rows).sort((a,b) => a-b).slice(0, 3)) {
+            const menu = rows[y].reduce((a, b) => a.getBoundingClientRect().left > b.getBoundingClientRect().left ? a : b);
+            menu.click();
 
-        const targetMenu = rowItems.reduce((prev, curr) => 
-            (prev.getBoundingClientRect().left > curr.getBoundingClientRect().left) ? prev : curr
-        );
+            let unsave;
+            for (let i = 0; i < CFG.retry && !unsave; i++) {
+                await sleep(100);
+                unsave = findByText('span', 'Unsave');
+            }
 
-        targetMenu.scrollIntoView({ block: "center" });
-        await new Promise(resolve => setTimeout(resolve, config.actionDelay));
-        targetMenu.click();
-
-        const success = await executeUnsaveAction(config);
-        if (!success) {
-            resetInterfaceState();
+            if (unsave) {
+                unsave.click();
+                await sleep(CFG.action);
+                const confirm = findByText('span', 'Remove') || findByText('span', 'Unsave');
+                if (confirm) confirm.click();
+            } else {
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            }
+            await sleep(CFG.wait);
         }
-
-        await new Promise(resolve => setTimeout(resolve, config.postActionWait));
     }
-}
-
-async function executeUnsaveAction(config) {
-    let unsaveOption = null;
-
-    for (let i = 0; i < config.menuRetryAttempts; i++) {
-        unsaveOption = Array.from(document.querySelectorAll('span'))
-            .find(span => span.innerText && span.innerText.trim() === "Unsave");
-        
-        if (unsaveOption) break;
-        await new Promise(resolve => setTimeout(resolve, config.retryInterval));
-    }
-
-    if (unsaveOption) {
-        unsaveOption.click();
-        await new Promise(resolve => setTimeout(resolve, config.actionDelay));
-
-        const confirmationButton = Array.from(document.querySelectorAll('div[role="button"] span'))
-            .find(span => {
-                const text = span.innerText;
-                return text && (text.includes("Remove") || text.includes("Unsave"));
-            });
-
-        if (confirmationButton) confirmationButton.click();
-        return true;
-    }
-    return false;
-}
-
-function resetInterfaceState() {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    document.body.click();
-}
-
-initializeSavedItemsCleanup();
+})();
 ``` 
 ## Performance Tuning
-Users with slower internet connections or older hardware can adjust the `CONFIG` object at the top of the script:
+You can modify the `CFG` object at the top of the script:
 
-* **scrollDelay**: Increase this if the page takes a long time to load new posts.
-* **actionDelay**: Increase this if the "More" menu is closing before the script can click "Unsave."
-* **menuRetryAttempts**: Increase this if the script skips items without deleting them.
+* **scroll**: Increase if your internet is slow and posts take time to appear.
+* **action**: Increase if the confirmation pop-up is missing the click.
+* **retry**: How many times to look for the "Unsave" button before giving up on that row.
 
 ---
 
